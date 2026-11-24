@@ -145,6 +145,23 @@ table.iv td:first-child{font-family:var(--f-mono);font-weight:700}
 .callout{border-radius:10px;padding:12px 14px;background:var(--accent-soft);font-size:14px}
 .err{color:var(--root);font-weight:600;font-size:14px}
 pre.lead-sheet{font-family:var(--f-mono);font-size:13px;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px 12px;white-space:pre-wrap;margin:0}
+.lp-strip{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
+.lp-card{border:1px solid var(--line);border-radius:12px;background:var(--surface);color:var(--ink);padding:10px;display:flex;flex-direction:column;gap:6px;text-align:left;min-width:0}
+.lp-card.on{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent)}
+.lp-card .top2{display:flex;justify-content:space-between;align-items:baseline}
+.lp-card .nm{font:700 20px var(--f-mono);color:var(--chord)}
+.lp-card .ix{font:500 12px var(--f-mono);color:var(--muted)}
+.lp-card .tr{font-size:12.5px;color:var(--muted)}
+#lp-now .hand{max-width:640px}
+.lp-now-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.lp-now-head .nm{font:700 40px var(--f-mono);color:var(--chord);line-height:1}
+.lp-next{font-size:14px;color:var(--muted)}
+.lp-next b{font-family:var(--f-mono);color:var(--ink);font-size:18px}
+.beats{display:flex;gap:6px}
+.beats i{width:14px;height:14px;border-radius:50%;background:var(--line);display:inline-block}
+.beats i.on{background:var(--accent)}
+.switch{border-radius:10px;background:var(--accent-soft);padding:10px 12px;font-size:14px;display:flex;flex-direction:column;gap:4px}
+.switch ul{margin:0;padding-left:18px}
 .tip{font-size:13px;color:var(--muted)}
 .cd-f1{fill:var(--f1)}.cd-f2{fill:var(--f2)}.cd-f3{fill:var(--f3)}.cd-f4{fill:var(--f4)}
 .legend{display:flex;gap:12px;flex-wrap:wrap;font-size:13px}
@@ -188,6 +205,7 @@ pre.lead-sheet{font-family:var(--f-mono);font-size:13px;background:var(--bg);bor
       <a href="#nhac-ly" data-v="nhac-ly">Nhạc lý</a>
       <a href="#hop-am" data-v="hop-am">Hợp âm</a>
       <a href="#bai-mau" data-v="bai-mau">Bài mẫu</a>
+      <a href="#vong-hop-am" data-v="vong-hop-am">Vòng hợp âm</a>
       <a href="#doc-sheet" data-v="doc-sheet">Đọc sheet</a>
     </nav>
   </div>
@@ -286,6 +304,30 @@ pre.lead-sheet{font-family:var(--f-mono);font-size:13px;background:var(--bg);bor
 </section>
 
 <!-- ================= ĐỌC SHEET ================= -->
+<!-- ================= VÒNG HỢP ÂM ================= -->
+<section class="view" id="v-vong-hop-am" hidden>
+  <div style="display:flex;flex-direction:column;gap:6px">
+    <h1>Luyện vòng hợp âm</h1>
+    <p class="lead">Gõ vòng hợp âm của bài bạn muốn tập. App xếp hình thế tay theo đúng thứ tự, chỉ cách chuyển ngón giữa hai hợp âm liền nhau, và chạy theo nhịp để bạn tập theo.</p>
+  </div>
+  <div class="card">
+    <div class="row" style="align-items:flex-end">
+      <label class="f" style="flex:1;min-width:220px">Vòng hợp âm<input type="text" id="lp-input" value="C G Am F" spellcheck="false" autocomplete="off" style="font:600 16px var(--f-mono);color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px;text-transform:none;letter-spacing:0"></label>
+      <button class="btn primary" id="lp-apply">Xếp thế tay</button>
+    </div>
+    <div class="row small"><span class="muted">Vòng mẫu:</span><span id="lp-presets" class="row" style="gap:6px"></span></div>
+    <div class="row">
+      <label class="f">Tốc độ (BPM)<input type="number" id="lp-bpm" value="70" min="30" max="200" style="width:84px"></label>
+      <label class="f">Phách mỗi hợp âm<select id="lp-beats"><option>2</option><option selected>4</option><option>8</option></select></label>
+      <label class="f">Lặp lại<select id="lp-loop"><option value="1" selected>Lặp liên tục</option><option value="0">Chạy 1 lượt</option></select></label>
+      <div class="row" style="align-self:flex-end"><button class="btn primary" id="lp-play">▶ Chạy vòng</button><button class="btn" id="lp-stop">■ Dừng</button></div>
+    </div>
+    <div class="err" id="lp-err" hidden></div>
+  </div>
+  <div class="card" id="lp-now"></div>
+  <div class="lp-strip" id="lp-strip"></div>
+</section>
+
 <section class="view" id="v-doc-sheet" hidden>
   <div style="display:flex;flex-direction:column;gap:6px">
     <h1>Đọc sheet, ra hợp âm</h1>
@@ -485,7 +527,7 @@ function strum(pc,type,when=0,down=true,gain=0.2){
   const ms=chordMidis(voicing(pc,type)); const order=down?ms:ms.slice().reverse();
   order.forEach((m,k)=>pluck(m,when+k*0.022+Math.random()*0.006,gain*(0.85+Math.random()*0.3)));
 }
-function stopAll(){ live.forEach(s=>{try{s.stop()}catch(e){}}); live.clear(); timers.forEach(clearTimeout); timers.length=0; document.querySelectorAll('.ms.on').forEach(e=>e.classList.remove('on')); }
+function stopAll(){ live.forEach(s=>{try{s.stop()}catch(e){}}); live.clear(); timers.forEach(clearTimeout); timers.length=0; document.querySelectorAll('.ms.on').forEach(e=>e.classList.remove('on')); lpPlaying=false; }
 const timers=[];
 /* ---------------- Finger placement view ---------------- */
 const FNAME={1:'Ngón trỏ',2:'Ngón giữa',3:'Ngón áp út',4:'Ngón út'};
@@ -577,7 +619,7 @@ document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&!document.getEleme
 document.addEventListener('click',e=>{ const b=e.target.closest('button.diag'); if(b){ strum(+b.dataset.pc,b.dataset.type); openChord(+b.dataset.pc,b.dataset.type,b.querySelector('.nm')?.textContent); } });
 
 /* ---------------- Routing ---------------- */
-const VIEWS=['nhac-ly','hop-am','bai-mau','doc-sheet'];
+const VIEWS=['nhac-ly','hop-am','bai-mau','vong-hop-am','doc-sheet'];
 function route(){ const h=location.hash.slice(1); const v=VIEWS.includes(h)?h:'nhac-ly';
   VIEWS.forEach(x=>document.getElementById('v-'+x).hidden=x!==v);
   document.querySelectorAll('#nav a').forEach(a=>{ if(a.dataset.v===v) a.setAttribute('aria-current','page'); else a.removeAttribute('aria-current'); });
@@ -719,6 +761,7 @@ function renderSong(){
       <span class="small muted">Đổi tông</span><button class="btn" data-a="dn">− ½</button><button class="btn" data-a="up">+ ½</button>
       <span class="small muted" style="margin-left:8px">Capo</span><button class="btn" data-a="cdn">−</button><button class="btn" data-a="cup">+</button>
       <button class="btn" data-a="best">Tìm capo dễ nhất</button>
+      <button class="btn primary" data-a="loop">Luyện thế tay bài này</button>
     </div>
     <div><div class="eyebrow" style="margin-bottom:6px">Điệu quạt</div><div class="strum">${strumHtml}</div><p class="small muted" style="margin-top:6px">${esc(s.note)}</p></div>
     <div><div class="eyebrow" style="margin-bottom:6px">Hợp âm trong bài${capo?' (thế bấm khi kẹp capo)':''}</div>
@@ -729,6 +772,7 @@ document.getElementById('song-view').onclick=e=>{
   const c=e.target.closest('[data-ch]'); if(c){const p=parseChord(c.dataset.ch); if(p) strum(p.pc,p.type); return;}
   const b=e.target.closest('[data-a]'); if(!b) return; const a=b.dataset.a;
   if(a==='up')semis++; if(a==='dn')semis--; if(a==='cup')capo=Math.min(9,capo+1); if(a==='cdn')capo=Math.max(0,capo-1);
+  if(a==='loop'){ const s=SONGS.find(x=>x.id===songId); const shapeT=mod(mod(s.key+semis)-capo); const seq=[...s.text.matchAll(/\[([^\]]+)\]/g)].map(m=>transposeName(m[1],semis-capo,shapeT)); const ded=seq.filter((x,i)=>i===0||x!==seq[i-1]); loadLoop(ded.slice(0,16)); return; }
   if(a==='best'){ const s=SONGS.find(x=>x.id===songId); const ch=[...new Set([...s.text.matchAll(/\[([^\]]+)\]/g)].map(m=>transposeName(m[1],semis)))]; capo=bestCapo(ch).capo; }
   renderSong();
 };
@@ -917,6 +961,72 @@ document.getElementById('sh-play').onclick=playSheet;
 document.getElementById('sh-stop').onclick=stopAll;
 document.getElementById('sh-cpm').onchange=runSheet; document.getElementById('sh-key').onchange=runSheet;
 
+/* ---------------- Chord loop practice ---------------- */
+let lpPlaying=false, lpChords=[], lpIdx=0;
+const LP_PRESETS=[['Pop (I–V–vi–IV)','C G Am F'],['Ballad','Am F C G'],['Thập niên 50','G Em C D'],['Dễ nhất','G C D'],['Blues 12 ô','A7 A7 A7 A7 D7 D7 A7 A7 E7 D7 A7 E7'],['Chặn (barre)','F C Dm Bb']];
+function parseLoop(txt){
+  const toks=txt.split(/[\s,|\-–>]+/).map(t=>t.trim()).filter(Boolean); const out=[], bad=[];
+  toks.forEach(t=>{ const n=t[0].toUpperCase()+t.slice(1); const c=parseChord(n); if(c) out.push({...c,label:n}); else bad.push(t); });
+  return {out,bad};
+}
+function fingerMap(pc,type){ const v=voicing(pc,type), m={}; v.frets.forEach((f,i)=>{ const fi=v.fingers[i]; if(f>0&&fi)(m[fi]=m[fi]||[]).push({f,i}); }); return m; }
+function switchTips(a,b){
+  const A=fingerMap(a.pc,a.type), B=fingerMap(b.pc,b.type); const keep=[], move=[];
+  Object.keys(B).sort().forEach(fi=>{ const nb=B[fi], na=A[fi];
+    const desc=arr=>arr.length>1?`chặn dây ${6-arr[0].i}–${6-arr[arr.length-1].i} phím ${arr[0].f}`:`dây ${6-arr[0].i} phím ${arr[0].f}`;
+    if(na&&JSON.stringify(na)===JSON.stringify(nb)) keep.push(`${FNAME[fi]} giữ nguyên (${desc(nb)})`);
+    else if(na&&na.length===1&&nb.length===1&&na[0].i===nb[0].i) move.push(`${FNAME[fi]} trượt dọc ${SNAME[nb[0].i]} từ phím ${na[0].f} sang phím ${nb[0].f}`);
+    else move.push(`${FNAME[fi]} chuyển ${na?'từ '+desc(na)+' ':''}sang ${desc(nb)}`); });
+  const lift=Object.keys(A).filter(fi=>!B[fi]).map(fi=>FNAME[fi].toLowerCase());
+  let h=''; if(keep.length) h+=`<div><b>Ngón làm "mỏ neo":</b> ${keep.join('; ')}. Đừng nhấc ngón này lên.</div>`;
+  if(move.length) h+=`<ul>${move.map(x=>`<li>${x}</li>`).join('')}</ul>`;
+  if(lift.length) h+=`<div>Nhấc ${lift.join(', ')} ra.</div>`;
+  if(!keep.length) h+=`<div class="small muted">Không có ngón chung. Mẹo: nhấc cả bàn tay cùng lúc theo "hình" của hợp âm mới, thay vì đặt từng ngón.</div>`;
+  return h;
+}
+function renderLoop(){
+  const {out,bad}=parseLoop(document.getElementById('lp-input').value); const err=document.getElementById('lp-err');
+  if(bad.length){ err.textContent=`Chưa hiểu hợp âm: ${bad.join(', ')}. Dùng dạng C, Am, G7, Dm7, Cmaj7, Asus4, Bdim, F#m, Bb…`; err.hidden=false; } else err.hidden=true;
+  if(!out.length){ document.getElementById('lp-now').innerHTML='<p class="muted">Gõ ít nhất một hợp âm, ví dụ: C G Am F</p>'; document.getElementById('lp-strip').innerHTML=''; return; }
+  lpChords=out; lpIdx=Math.min(lpIdx,out.length-1);
+  document.getElementById('lp-strip').innerHTML=out.map((c,i)=>{ const nx=out[(i+1)%out.length];
+    return `<button class="lp-card" data-i="${i}"><div class="top2"><span class="nm">${esc(c.label)}</span><span class="ix">${i+1}/${out.length}</span></div><div class="hand">${handSVG(c.pc,c.type)}</div>${out.length>1?`<span class="tr">→ tiếp theo: ${esc(nx.label)}</span>`:''}</button>`; }).join('');
+  showLoopChord(lpIdx,-1);
+}
+function showLoopChord(i,beat){
+  lpIdx=i; const c=lpChords[i]; if(!c) return; const nx=lpChords[(i+1)%lpChords.length]; const beats=+document.getElementById('lp-beats').value;
+  document.querySelectorAll('.lp-card').forEach(e=>e.classList.toggle('on',+e.dataset.i===i));
+  document.getElementById('lp-now').innerHTML=`
+    <div class="lp-now-head"><div style="display:flex;flex-direction:column;gap:6px"><span class="eyebrow">Đang bấm · ${i+1}/${lpChords.length}</span><span class="nm">${esc(c.label)}</span></div>
+      <div style="display:flex;flex-direction:column;gap:8px;align-items:flex-end"><div class="beats">${Array.from({length:beats},(_,k)=>`<i class="${k===beat?'on':''}"></i>`).join('')}</div>${lpChords.length>1?`<span class="lp-next">Tiếp theo: <b>${esc(nx.label)}</b></span>`:''}</div></div>
+    <div class="legend"><span><i style="background:var(--f1)"></i>1 Trỏ</span><span><i style="background:var(--f2)"></i>2 Giữa</span><span><i style="background:var(--f3)"></i>3 Áp út</span><span><i style="background:var(--f4)"></i>4 Út</span></div>
+    <div class="hand">${handSVG(c.pc,c.type)}</div>
+    <div class="two"><div><h3 style="margin-bottom:6px">Đặt ngón</h3><ol class="steps-list">${chordSteps(c.pc,c.type)}</ol></div>
+    ${lpChords.length>1&&(nx.pc!==c.pc||nx.type!==c.type)?`<div><h3 style="margin-bottom:6px">Chuyển sang ${esc(nx.label)}</h3><div class="switch">${switchTips(c,nx)}</div></div>`:''}</div>`;
+}
+function updateBeat(beat){ document.querySelectorAll('#lp-now .beats i').forEach((e,k)=>e.classList.toggle('on',k===beat)); }
+function playLoop(){
+  stopAll(); if(!lpChords.length) renderLoop(); if(!lpChords.length) return; ac(); lpPlaying=true;
+  const bpm=Math.min(200,Math.max(30,+document.getElementById('lp-bpm').value||70)), q=60/bpm, beats=+document.getElementById('lp-beats').value;
+  const cycle=()=>{ if(!lpPlaying) return; let t=0.08;
+    lpChords.forEach((c,i)=>{ for(let b=0;b<beats;b++){ const tt=t+b*q;
+        strum(c.pc,c.type,tt,b%2===0,b===0?0.22:0.14);
+        timers.push(setTimeout(()=>{ if(!lpPlaying) return; if(b===0) showLoopChord(i,0); else updateBeat(b); },tt*1000)); }
+      t+=beats*q; });
+    timers.push(setTimeout(()=>{ if(lpPlaying&&document.getElementById('lp-loop').value==='1') cycle(); else { lpPlaying=false; updateBeat(-1);} },t*1000));
+  };
+  cycle();
+}
+function loadLoop(names){ document.getElementById('lp-input').value=names.join(' '); lpIdx=0; renderLoop(); location.hash='vong-hop-am'; }
+document.getElementById('lp-presets').innerHTML=LP_PRESETS.map(([n,v])=>`<button class="chip" data-v="${v}">${n}</button>`).join('');
+document.getElementById('lp-presets').onclick=e=>{ const b=e.target.closest('.chip'); if(b){ stopAll(); document.getElementById('lp-input').value=b.dataset.v; lpIdx=0; renderLoop(); } };
+document.getElementById('lp-apply').onclick=()=>{ stopAll(); lpIdx=0; renderLoop(); };
+document.getElementById('lp-input').addEventListener('keydown',e=>{ if(e.key==='Enter'){ stopAll(); lpIdx=0; renderLoop(); } });
+document.getElementById('lp-play').onclick=playLoop;
+document.getElementById('lp-stop').onclick=()=>{ stopAll(); updateBeat(-1); };
+document.getElementById('lp-beats').onchange=()=>showLoopChord(lpIdx,-1);
+document.getElementById('lp-strip').onclick=e=>{ const b=e.target.closest('.lp-card'); if(b){ const c=lpChords[+b.dataset.i]; showLoopChord(+b.dataset.i,-1); strum(c.pc,c.type); document.getElementById('lp-now').scrollIntoView({behavior:'smooth',block:'start'}); } };
+
 /* ---------------- Init ---------------- */
 fillRootSelect(document.getElementById('fb-root'),7);
 fillRootSelect(document.getElementById('cb-root'),0);
@@ -927,7 +1037,7 @@ document.getElementById('cb-type').innerHTML=Object.entries(TYPES).map(([k,v])=>
 document.getElementById('cb-play').onclick=()=>strum(+document.getElementById('cb-root').value,document.getElementById('cb-type').value);
 document.getElementById('dk-key').onchange=renderDiatonic;
 document.getElementById('sh-text').value=SAMPLE;
-renderKeys(); renderFretboard(); renderBuilder(); renderDiatonic(); renderLib(); renderSongList(); renderSong(); keyOptions(); runSheet(); route();
+renderKeys(); renderFretboard(); renderBuilder(); renderDiatonic(); renderLib(); renderSongList(); renderSong(); keyOptions(); runSheet(); renderLoop(); route();
 </script>
 
 </body>
