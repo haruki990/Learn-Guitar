@@ -381,27 +381,68 @@ function chordCard(pc,type,{label,roman,majTonic}={}){
   return `<button class="diag" data-pc="${mod(pc)}" data-type="${type}">${roman?`<span class="rn">${roman}</span>`:''}<span class="nm">${esc(name)}</span>${chordSVG(pc,type)}<span class="nt">${notes}</span></button>`;
 }
 
-/* ---------------- Audio (plucked string) ---------------- */
-let actx=null; const live=new Set(); const bufCache=new Map();
-function ac(){ if(!actx) actx=new (window.AudioContext||window.webkitAudioContext)(); if(actx.state==='suspended') actx.resume(); return actx; }
+/* ---------------- Audio: synthesized nylon/steel string (Karplus-Strong + body + room) ---------------- */
+let actx=null, master=null; const live=new Set(); const bufCache=new Map();
+function ac(){
+  if(!actx){ actx=new (window.AudioContext||window.webkitAudioContext)(); buildMaster(actx); }
+  if(actx.state==='suspended') actx.resume(); return actx;
+}
+function buildMaster(ctx){
+  // body resonance + gentle top cut + reverb send + limiter
+  const input=ctx.createGain();
+  const body=ctx.createBiquadFilter(); body.type='peaking'; body.frequency.value=110; body.Q.value=1.2; body.gain.value=4;
+  const body2=ctx.createBiquadFilter(); body2.type='peaking'; body2.frequency.value=220; body2.Q.value=1.4; body2.gain.value=2.5;
+  const scoop=ctx.createBiquadFilter(); scoop.type='peaking'; scoop.frequency.value=2600; scoop.Q.value=0.9; scoop.gain.value=-3;
+  const lp=ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=5200; lp.Q.value=0.5;
+  const comp=ctx.createDynamicsCompressor(); comp.threshold.value=-14; comp.ratio.value=4; comp.attack.value=0.004; comp.release.value=0.25;
+  const dry=ctx.createGain(); dry.gain.value=0.9;
+  const wet=ctx.createGain(); wet.gain.value=0.22;
+  const rev=ctx.createConvolver(); rev.buffer=roomIR(ctx);
+  input.connect(body).connect(body2).connect(scoop).connect(lp);
+  lp.connect(dry).connect(comp); lp.connect(rev).connect(wet).connect(comp);
+  comp.connect(ctx.destination);
+  master=input;
+}
+function roomIR(ctx){
+  const sr=ctx.sampleRate, len=Math.floor(sr*1.3), ir=ctx.createBuffer(2,len,sr);
+  for(let ch=0;ch<2;ch++){ const d=ir.getChannelData(ch); let lpv=0;
+    for(let i=0;i<len;i++){ lpv+=0.35*((Math.random()*2-1)-lpv); d[i]=lpv*Math.pow(1-i/len,2.2)*Math.exp(-i/(sr*0.35)); } }
+  return ir;
+}
 function pluckBuf(midi){
   const ctx=ac(); if(bufCache.has(midi)) return bufCache.get(midi);
-  const f=440*Math.pow(2,(midi-69)/12), sr=ctx.sampleRate, N=Math.max(2,Math.round(sr/f)), len=Math.floor(sr*2.2);
-  const buf=ctx.createBuffer(1,len,sr), d=buf.getChannelData(0), ring=new Float32Array(N);
-  for(let i=0;i<N;i++) ring[i]=Math.random()*2-1;
-  const decay=midi>60?0.994:0.997; let idx=0;
-  for(let i=0;i<len;i++){ const a=ring[idx], b=ring[(idx+1)%N]; d[i]=a; ring[idx]=decay*0.5*(a+b); idx=(idx+1)%N; }
-  for(let i=len-2000;i<len;i++) d[i]*= (len-i)/2000;
+  const sr=ctx.sampleRate, f=440*Math.pow(2,(midi-69)/12);
+  const P=sr/f, N=Math.max(2,Math.floor(P-0.5)), frac=P-0.5-N, C=(1-frac)/(1+frac); // exact tuning with allpass
+  const T60=Math.max(1.8,5-(midi-40)*0.08);
+  const rho=Math.pow(0.001,1/(f*T60));
+  const len=Math.floor(sr*Math.min(4,T60+0.4));
+  const buf=ctx.createBuffer(1,len,sr), d=buf.getChannelData(0);
+  // soft excitation: low-passed noise, shaped by pluck position, no DC
+  const ex=new Float32Array(N); let l=0; const bright=midi>62?0.5:0.35;
+  for(let i=0;i<N;i++){ l+=bright*((Math.random()*2-1)-l); ex[i]=l; }
+  const pp=Math.max(1,Math.round(N*0.17)); const ring=new Float32Array(N); let mean=0,mx=0;
+  for(let i=0;i<N;i++){ ring[i]=ex[i]-(i>=pp?ex[i-pp]:0); mean+=ring[i]; } mean/=N;
+  for(let i=0;i<N;i++){ ring[i]-=mean; mx=Math.max(mx,Math.abs(ring[i])); }
+  for(let i=0;i<N;i++) ring[i]/=(mx||1);
+  let idx=0, px=0, ax=0, ay=0;
+  for(let i=0;i<len;i++){
+    const x=ring[idx]; d[i]=x;
+    const lpv=rho*(0.5*x+0.5*px); px=x;
+    const y=C*lpv+ax-C*ay; ax=lpv; ay=y;
+    ring[idx]=y; idx=(idx+1)%N;
+  }
+  const att=Math.floor(sr*0.0025); for(let i=0;i<att;i++) d[i]*=i/att;
+  const rel=Math.floor(sr*0.3); for(let i=len-rel;i<len;i++) d[i]*=(len-i)/rel;
   bufCache.set(midi,buf); return buf;
 }
 function pluck(midi,when=0,gain=0.28){
   const ctx=ac(); const src=ctx.createBufferSource(); src.buffer=pluckBuf(midi);
-  const g=ctx.createGain(); g.gain.value=gain; src.connect(g).connect(ctx.destination);
+  const g=ctx.createGain(); g.gain.value=gain*0.9; src.connect(g).connect(master);
   src.start(ctx.currentTime+when); live.add(src); src.onended=()=>live.delete(src);
 }
 function strum(pc,type,when=0,down=true,gain=0.2){
   const ms=chordMidis(voicing(pc,type)); const order=down?ms:ms.slice().reverse();
-  order.forEach((m,k)=>pluck(m,when+k*0.028,gain));
+  order.forEach((m,k)=>pluck(m,when+k*0.022+Math.random()*0.006,gain*(0.85+Math.random()*0.3)));
 }
 function stopAll(){ live.forEach(s=>{try{s.stop()}catch(e){}}); live.clear(); timers.forEach(clearTimeout); timers.length=0; document.querySelectorAll('.ms.on').forEach(e=>e.classList.remove('on')); }
 const timers=[];
